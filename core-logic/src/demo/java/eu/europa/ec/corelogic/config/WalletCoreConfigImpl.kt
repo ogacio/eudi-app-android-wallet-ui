@@ -33,6 +33,8 @@ import eu.europa.ec.eudi.wallet.issue.openid4vci.OpenId4VciManager
 import eu.europa.ec.eudi.wallet.issue.openid4vci.dpop.DPopConfig
 import eu.europa.ec.eudi.wallet.transfer.openId4vp.ClientIdScheme
 import eu.europa.ec.eudi.wallet.transfer.openId4vp.Format
+import eu.europa.ec.eudi.wallet.transfer.openId4vp.PreregisteredVerifier
+import org.multipaz.crypto.Algorithm
 import eu.europa.ec.eudi.wallet.trust.TrustPolicy
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -55,7 +57,34 @@ internal class WalletCoreConfigImpl : WalletCoreConfig {
                         withClientIdSchemes(
                             listOf(
                                 ClientIdScheme.X509SanDns,
-                                ClientIdScheme.X509Hash
+                                ClientIdScheme.X509Hash,
+                                // THESIS MODIFICATION - trust our own verifier.
+                                //
+                                // The EU's hosted verifier cannot process our
+                                // credential type: it classifies attestations from
+                                // deployment configuration, and our vct is not in
+                                // its list. So we run the same reference verifier
+                                // ourselves, with that type registered.
+                                //
+                                // Pre-registration is how a wallet is told which
+                                // verifiers it belongs to - a whitelist, not a
+                                // disabled check. Only clientId is matched, so the
+                                // verifier's URL can change without a rebuild.
+                                ClientIdScheme.Preregistered(
+                                    listOf(
+                                        PreregisteredVerifier(
+                                            clientId = "lemmy-bridge",
+                                            legalName = "EUDI Lemmy Thesis Prototype",
+                                            verifierApi = "https://example.org",
+                                            // The verifier SIGNS its request object with the
+                                            // access_certificate from its keystore (P-521 ->
+                                            // ES512). Without this key the wallet cannot check
+                                            // that signature and rejects the request.
+                                            jwsAlgorithm = Algorithm.ESP512,
+                                            jwkSet = """{"keys":[{"kty":"EC","crv":"P-521","x":"APWg4T3FQIeJD_xQN0kap5Mzp7lJ17Ctg_T8Gy24lwOp_EIhDzBK9MoCufSIITRolWlcjFTj3Ty91C9rctTuSf0F","y":"AEnFDKiecuqnZ8XMKgt7dFZWRfmzPFrgQmauwlbXDC0kHCZhV76VOgCoWdzfSLegLKGn-nINAIRqPR9n2KPpQwKn","use":"sig","kid":"access_certificate"}]}""",
+                                        )
+                                    )
+                                ),
                             )
                         )
                         withSchemes(
@@ -107,9 +136,21 @@ internal class WalletCoreConfigImpl : WalletCoreConfig {
                         relaxPkixRevocation()
                     }
 
+                    // THESIS MODIFICATION - allows issuance from a self-hosted issuer.
+                    //
+                    // INFORM instead of ENFORCE: a credential from an issuer that is
+                    //   not on the ETSI trusted list is still stored (ENFORCE would
+                    //   reject and delete it).
+                    // ignoreSignedMetadata(): accept plain JSON issuer metadata.
+                    //   requireSignedMetadata() demands a signed JWT whose certificate
+                    //   chains to an ETSI trust anchor, which a self-hosted issuer
+                    //   cannot provide.
+                    //
+                    // The official issuer keeps working: it also serves unsigned
+                    // metadata, and INFORM is more permissive than ENFORCE.
                     configureIssuerTrust {
-                        policy { default(TrustPolicy.Action.ENFORCE) }
-                        requireSignedMetadata()
+                        policy { default(TrustPolicy.Action.INFORM) }
+                        ignoreSignedMetadata()
                     }
 
                     configureDocumentStatusResolver {

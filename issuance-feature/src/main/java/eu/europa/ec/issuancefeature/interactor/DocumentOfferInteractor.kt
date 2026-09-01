@@ -17,6 +17,7 @@
 package eu.europa.ec.issuancefeature.interactor
 
 import android.content.Context
+import android.util.Log
 import eu.europa.ec.authenticationlogic.controller.authentication.BiometricsAvailability
 import eu.europa.ec.authenticationlogic.controller.authentication.DeviceAuthenticationResult
 import eu.europa.ec.authenticationlogic.model.BiometricCrypto
@@ -138,10 +139,12 @@ class DocumentOfferInteractorImpl(
             ).map { response ->
                 when (response) {
                     is ResolveDocumentOfferPartialState.Failure -> {
+                        Log.e("THESIS", "offer -> Failure: ${response.errorMessage}")
                         ResolveDocumentOfferInteractorPartialState.Failure(errorMessage = response.errorMessage)
                     }
 
                     is ResolveDocumentOfferPartialState.IssuerNotTrusted -> {
+                        Log.e("THESIS", "offer -> ISSUER NOT TRUSTED")
                         ResolveDocumentOfferInteractorPartialState.IssuerNotTrusted
                     }
 
@@ -149,6 +152,8 @@ class DocumentOfferInteractorImpl(
 
                         credentialOffers[offerUri] = response.offer
 
+                        Log.e("THESIS", "offer -> Success, offeredDocuments=" +
+                            response.offer.offeredDocuments.size)
                         val offerHasNoDocuments = response.offer.offeredDocuments.isEmpty()
                         if (offerHasNoDocuments) {
                             ResolveDocumentOfferInteractorPartialState.NoDocument(
@@ -211,6 +216,8 @@ class DocumentOfferInteractorImpl(
                 emit(it)
             }
         }.safeAsync {
+            // THESIS DEBUG - the real cause is otherwise swallowed
+            Log.e("THESIS", "resolveDocumentOffer threw: ${it::class.java.name}: ${it.message}", it)
             ResolveDocumentOfferInteractorPartialState.Failure(
                 errorMessage = it.localizedMessage ?: genericErrorMsg
             )

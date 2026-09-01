@@ -16,6 +16,7 @@
 
 package eu.europa.ec.corelogic.controller
 
+import android.util.Log
 import androidx.core.net.toUri
 import eu.europa.ec.authenticationlogic.controller.authentication.DeviceAuthenticationResult
 import eu.europa.ec.authenticationlogic.model.BiometricCrypto
@@ -589,6 +590,12 @@ class WalletCoreDocumentsControllerImpl(
             manager.resolveDocumentOffer(offerUri) { result ->
                 when (result) {
                     is OfferResult.Failure -> {
+                        // THESIS DEBUG - the real cause is otherwise reduced to a generic string
+                        Log.e("THESIS", "OfferResult.Failure cause=" +
+                            result.cause::class.java.name + " msg=" + result.cause.message, result.cause)
+                        result.cause.cause?.let {
+                            Log.e("THESIS", "  nested cause=" + it::class.java.name + " msg=" + it.message, it)
+                        }
                         trySendBlocking(
                             if (result.cause.indicatesUntrustedIssuer()) {
                                 ResolveDocumentOfferPartialState.IssuerNotTrusted
